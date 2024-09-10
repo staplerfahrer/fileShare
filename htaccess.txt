@@ -1,0 +1,5 @@
+DirectoryIndex fileShare.php
+SetEnv ENV_PUBLIC_PATH https://www.example.com/fileShare/
+SetEnv ENV_USERNAME fileShare
+SetEnv ENV_PASSWORD example
+SetEnv ENV_TOKEN example
