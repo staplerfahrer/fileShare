@@ -250,7 +250,7 @@ function head()
 {
 	return <<<HEAD
 		<head>
-		<title>Nets & More File Share</title>
+		<title>File Share</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<style>
 			* { font-family: Helvetica, Arial; }
