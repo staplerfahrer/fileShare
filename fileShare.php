@@ -1,5 +1,5 @@
 <?php
-session_start();
+$timeout = 10*365*24*3600;
 
 define('PUBLIC_PATH',         getenv('ENV_PUBLIC_PATH'));
 define('LOCAL_PATH',          __DIR__ . '/');
@@ -12,11 +12,11 @@ define('APP_AUTHENTICATING', 1);
 define('APP_LOGGED_IN',      2);
 
 #region Determine app state
-if (!isset($_SESSION['token']) && count($_POST) > 0) 
+if (!isset($_COOKIE['token']) && count($_POST) > 0) 
 {
 	$formState = APP_AUTHENTICATING;
 }
-elseif (isset($_SESSION['token']) && $_SESSION['token'] === AUTHENTICATED_TOKEN)
+elseif (isset($_COOKIE['token']) && $_COOKIE['token'] === AUTHENTICATED_TOKEN)
 {
 	$formState = APP_LOGGED_IN;
 }
@@ -35,9 +35,9 @@ if ($formState === APP_AUTHENTICATING)
 	}
 	else
 	{
-		$formState          = APP_LOGGED_IN;
-		$_SESSION['token']  = AUTHENTICATED_TOKEN;
-		$response           = uiAppForm();
+		setcookie('token', AUTHENTICATED_TOKEN, time()+$timeout, '/fileShare', '', false, true);
+		$formState = APP_LOGGED_IN;
+		$response  = uiAppForm();
 	}
 }
 elseif ($formState === APP_LOGGED_IN)
@@ -46,6 +46,7 @@ elseif ($formState === APP_LOGGED_IN)
 }
 else
 {
+	setcookie('token', '', -1, '/fileShare', '', false, true);
 	$response = uiLoginForm();
 }
 #endregion
@@ -111,11 +112,11 @@ function uiAppForm()
 		$desiredFileNames = prepareFiles($tempZipDir);
 		$latestZipUrl     = zipDirectory($tempZipDir, $desiredFileNames, $desiredZipName);
 
-		$body             = rawurlencode($latestZipUrl);
+		$body             = rawurlencode("{$latestZipUrl}\n\nFor best results, use a computer to open this file.");
 		$latest           = <<<HTML
 			<h1>Your new file</h1>
 			<p><a href="{$latestZipUrl}">{$latestZipUrl}</a></p>
-			<p style="font-size: 150%;"><a href="mailto:?body={$body}">?? Email this link</a></p>
+			<p style="font-size: 150%;"><a href="mailto:?body={$body}">📨 Email this link</a></p>
 		HTML;
 	}
 	elseif (isset($_POST['action']) && $_POST['action'] === 'actionDelete')
@@ -130,12 +131,14 @@ function uiAppForm()
 
 	$uploadForm = <<<HTML
 		<h1>Upload new files</h1>
-		<form method="POST" enctype="multipart/form-data">
+		<form id="uploadForm">
 		<input type="hidden" name="action" value="actionUpload">
 		<p><input type="text" name="zipName" maxlength="20" size="20" placeholder="enter zip file name here"></p>
 		<p><input type="file" name="uploads[]" multiple></p>
-		<p><input type="submit" value="Upload" onclick="submitClick(this)"></p>
+		<p><input type="submit" value="Upload"></p>
 		</form>
+		<progress id="progressBar" value="0" max="100" style="width:100%; display:none;"></progress>
+		<p id="uploadStatus"></p>
 	HTML;
 
 	$fileListing = '<h1>List of available files</h1>';
@@ -259,12 +262,51 @@ function head()
 			.clicked { background-color: #23408e; }
 		</style>
 		<script>
-			function submitClick(btn)
-			{
-				btn.value = 'Uploading...';
-				btn.form.submit();
-				btn.disabled = true;
-			}
+			document.addEventListener('DOMContentLoaded', function () {
+				const form = document.getElementById('uploadForm');
+				const progressBar = document.getElementById('progressBar');
+				const statusText = document.getElementById('uploadStatus');
+				const body = document.querySelector('body');
+
+				form.addEventListener('submit', function (e) {
+					e.preventDefault();
+
+					var btn = document.querySelector('input[type=submit]');
+					btn.value = 'Uploading, please wait...';
+					btn.disabled = true;
+
+					const formData = new FormData(form);
+					const xhr = new XMLHttpRequest();
+						
+					xhr.open('POST', window.location.href, true);
+						
+					xhr.upload.addEventListener('progress', function (e) {
+						if (e.lengthComputable) {
+							const percentComplete = Math.round((e.loaded / e.total) * 100);
+							progressBar.style.display = 'block';
+							progressBar.value = percentComplete;
+							statusText.textContent = `Upload progress: \${percentComplete}%`;
+						}
+					});
+				
+					xhr.onload = function () {
+						if (xhr.status === 200) {
+							statusText.textContent = 'Upload complete. Reloading...';
+							body.innerHTML = xhr.response;
+						} else {
+							body.innerHTML = xhr.response;
+						}
+					};
+				
+					xhr.onerror = function () {
+						statusText.textContent = 'An error occurred during the upload.';
+					};
+				
+					xhr.send(formData);
+
+				});
+			});
+							
 		</script>
 		</head>
 	HEAD;
