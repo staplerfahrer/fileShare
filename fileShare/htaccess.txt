@@ -1,0 +1,2 @@
+DirectoryIndex fileShare.php
+SetEnv ENV_PUBLIC_PATH https://www.example.com/fileShare/
